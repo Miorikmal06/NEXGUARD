@@ -1,0 +1,54 @@
+/* =====================================================================
+   ONEPASS theme untuk page login (dimuat SELEPAS login-scroll.css)
+   Gaya hero 1password.com: latar #1D1D21 -> biru #145FE4 -> #99BEFF,
+   bar navigasi putih, heading nipis, butang pill putih teks biru.
+   Hanya rupa. Revert: buang <link> login-onepass.css dari login.html.
+   ===================================================================== */
+@font-face{font-family:'DM Sans';font-weight:300;font-style:normal;font-display:swap;src:url('fonts/dm-sans-latin-300-normal.woff2') format('woff2')}
+@font-face{font-family:'DM Sans';font-weight:400;font-style:normal;font-display:swap;src:url('fonts/dm-sans-latin-400-normal.woff2') format('woff2')}
+@font-face{font-family:'DM Sans';font-weight:500;font-style:normal;font-display:swap;src:url('fonts/dm-sans-latin-500-normal.woff2') format('woff2')}
+@font-face{font-family:'DM Sans';font-weight:600;font-style:normal;font-display:swap;src:url('fonts/dm-sans-latin-600-normal.woff2') format('woff2')}
+
+:root{
+  --bg:#1D1D21; --fg:#fff; --dim:rgba(255,255,255,.7);
+  --op-blue:#145FE4; --op-sky:#99BEFF;
+  --sans:'DM Sans','Outfit',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --serif:var(--sans);
+}
+html,body{background:var(--bg);font-family:var(--sans)}
+
+/* hero gradient replaces the photo */
+.ls-bg{background:linear-gradient(180deg,#1D1D21 0%,#1D1D21 30%,#145FE4 78%,#99BEFF 100%)}
+.ls-bg::before{display:none}
+.ls-bg::after{background:radial-gradient(ellipse 70% 45% at 50% 100%,rgba(153,190,255,.35),transparent 70%)}
+
+/* white top navigation bar */
+.ls-top{margin:16px var(--pad) 0;padding:14px 22px;background:#fff;color:#1D1D21;border-radius:9999px;
+  box-shadow:0 20px 50px -24px rgba(0,0,0,.6);font-weight:400;gap:18px;align-items:center}
+.ls-top b{font-weight:600;letter-spacing:-.01em}
+.ls-top span{color:#5E6068}
+.ls-top > div:first-child b{font-size:16px;letter-spacing:-.02em}
+
+/* "Login as <name>" in light, tight type like the 1Password hero */
+.ls-static{font-weight:300;letter-spacing:-.045em}
+.ls-item{font-family:var(--sans);font-style:normal;font-weight:300;font-size:1em;letter-spacing:-.045em;text-shadow:none}
+
+/* password step: white pill field + white pill CTA with blue text */
+.ls-fld label{letter-spacing:0;text-transform:none;font-size:14px;font-weight:500;color:var(--dim)}
+.ls-fld input{font-size:17px;font-weight:400;color:#1D1D21;background:#fff;border:1px solid transparent;border-radius:9999px;padding:12px 22px}
+.ls-fld input:focus{border-color:var(--op-sky);box-shadow:0 0 0 4px rgba(153,190,255,.4)}
+.ls-fld input::placeholder{color:#8B8D96}
+.ls-btn{font-weight:500;color:var(--op-blue);background:#fff;padding:13px 30px;box-shadow:0 14px 30px -14px rgba(0,0,0,.5)}
+.ls-btn:hover{opacity:1;background:#EEF3FD}
+.ls-link{color:#fff;text-decoration-color:rgba(255,255,255,.5)}
+.ls-err{color:#fff;background:rgba(198,40,40,.85);border-radius:9999px;padding:8px 16px;flex-basis:auto}
+
+/* footer */
+.ls-foot{color:rgba(255,255,255,.85)}
+.ls-sound{color:#fff;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.4)}
+.ls-sound:hover{background:rgba(255,255,255,.2);border-color:#fff}
+.ls-foot i{background:#4ADE80;box-shadow:0 0 0 3px rgba(74,222,128,.25)}
+
+@media (max-width:760px){
+  .ls-top{border-radius:24px;margin:12px 12px 0;padding:12px 16px}
+}

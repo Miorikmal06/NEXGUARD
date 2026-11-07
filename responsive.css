@@ -1,0 +1,86 @@
+/* ==========================================================================
+   NEXGUARD - responsive layer (phone / tablet / laptop / large desktop)
+   Loaded LAST on every console page, so it only refines the existing styles.
+   Breakpoints: <=480 phone, <=900 tablet portrait, <=1180 small laptop, >=1700 wide.
+   ========================================================================== */
+
+/* ---- never let media or long strings push the page sideways ---- */
+img, video, canvas, svg { max-width: 100%; }
+.main, .panel, .panel-body, .kpi-card { min-width: 0; }
+.main { overflow-wrap: break-word; }
+.plate-chip, .kpi-num, code { overflow-wrap: normal; }
+
+/* ---- 5 KPI cards on the dashboard (4 original + "Inside now") ---- */
+.main:has(.console-grid) .kpi-strip { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.main:has(.console-grid) .kpi-strip .kpi-num { font-size: clamp(30px, 2.6vw, 40px); }
+@media (max-width: 1180px) {
+  .main:has(.console-grid) .kpi-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .main:has(.console-grid) .kpi-strip > .kpi-card:nth-child(n+4) { box-shadow: inset 0 1px 0 #ECECF0 !important; }
+  .main:has(.console-grid) .kpi-strip > .kpi-card:nth-child(4) { box-shadow: inset 0 1px 0 #ECECF0 !important; }
+  .main:has(.console-grid) .kpi-strip > .kpi-card:nth-child(5) { box-shadow: inset 1px 0 0 #ECECF0, inset 0 1px 0 #ECECF0 !important; }
+}
+@media (max-width: 900px) {
+  .main:has(.console-grid) .kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* the odd 5th card spans the full row instead of hanging alone */
+  .main:has(.console-grid) .kpi-strip > .kpi-card:last-child:nth-child(odd) { grid-column: 1 / -1; box-shadow: inset 0 1px 0 #ECECF0 !important; }
+}
+
+/* ---- blacklist page ---- */
+.bl-form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 14px; align-items: end; }
+.bl-form .bl-wide { grid-column: span 2; }
+.bl-form .field { margin: 0; }
+.bl-form .field input, .bl-form .field select { width: 100%; box-sizing: border-box; }
+.bl-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.bl-main { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 260px; }
+@media (max-width: 900px) { .bl-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) {
+  .bl-form { grid-template-columns: 1fr; }
+  .bl-form .bl-wide { grid-column: auto; }
+  .bl-form .btn { width: 100%; }
+}
+
+/* ---- tables and long lists scroll inside their own box, never the page ---- */
+.nx-table-wrap, .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.panel-body table { max-width: 100%; }
+.plate-row { flex-wrap: wrap; gap: 8px; }
+
+/* ---- modals fit small screens ---- */
+.modal-box { max-width: calc(100vw - 24px); max-height: 92vh; max-height: 92dvh; overflow-y: auto; box-sizing: border-box; }
+.kpi-modal-gallery { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+
+/* ---- touch devices: comfortable targets, no iOS input zoom ---- */
+@media (pointer: coarse) {
+  .btn, .btn-primary, .btn-ghost-mini, .btn-del, .nx-btn, .nx-seg button, .nx-tabs button,
+  .sidebar-nav a, .nx-icon-btn, select, input[type="text"], input[type="password"], input[type="number"],
+  input[type="search"], input[type="tel"], input[type="date"], textarea { min-height: 44px; }
+  select, input[type="text"], input[type="password"], input[type="number"], input[type="search"],
+  input[type="tel"], input[type="date"], textarea { font-size: 16px; }
+  .btn-ghost-mini, .nx-btn { padding-left: 14px; padding-right: 14px; }
+  .nx-icon-btn { min-width: 44px; }
+}
+
+/* ---- buttons never split their label ---- */
+.btn, .btn-ghost-mini, .nx-btn, .nx-seg button, .nx-tabs button { white-space: nowrap; }
+
+/* ---- phone ---- */
+@media (max-width: 480px) {
+  .main:has(.console-grid) .kpi-strip > .kpi-card { padding: 16px 12px !important; gap: 10px; }
+  .main:has(.console-grid) .kpi-strip .kpi-label { font-size: 12.5px; }
+  .main:has(.console-grid) .kpi-strip .kpi-icon { width: 32px; height: 32px; flex: none; }
+  .main:has(.console-grid) .kpi-strip .kpi-chevron { display: none; }
+  .main { padding-left: 12px; padding-right: 12px; }
+  .main-header h1 { font-size: clamp(26px, 8vw, 34px); }
+  .panel-header { flex-wrap: wrap; gap: 8px; }
+  .nx-tabs { overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .nx-tabs::-webkit-scrollbar { display: none; }
+  .nx-toolbar { flex-direction: column; align-items: stretch; gap: 10px; }
+  #alert-banner { padding: 10px 12px !important; font-size: 13px !important; }
+}
+
+/* ---- keep the fixed alarm banner from covering the page header on small screens ---- */
+@media (max-width: 900px) { body:has(#alert-banner[style*="display: flex"]) .app-shell { padding-top: 64px; } }
+
+/* ---- wide desktop: keep line lengths and cards from stretching forever ---- */
+@media (min-width: 1700px) {
+  .main { max-width: 1680px; margin-left: auto; margin-right: auto; }
+}
