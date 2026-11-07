@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign In - Plate Checkpoint</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script>(function(){try{var t=localStorage.getItem('theme');if(t=='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
+<style>
+  /* Background photo for THIS page only - overrides the plain white login-bg */
+  .login-bg {
+    position: relative;
+    overflow: hidden;
+    background-color: #0d1f14;
+  }
+  .login-bg::before {
+    content: "";
+    position: absolute;
+    inset: -12px;
+    background-image: url('{{ url_for('static', filename='img/seri-hijau-entrance.jpg') }}');
+    background-size: cover;
+    background-position: center 60%;
+    filter: blur(6px) brightness(0.6) saturate(1.05);
+    transform: scale(1.06);
+    z-index: 0;
+  }
+  .login-bg::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(9,20,13,0.55) 0%, rgba(9,20,13,0.72) 100%);
+    z-index: 0;
+  }
+  .login-card {
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.35);
+  }
+</style>
+</head>
+<body>
+
+<div class="login-bg">
+  <div class="panel login-card">
+    <div style="padding:28px 28px 8px; text-align:center;">
+      <img class="brand-logo-img login-brand-logo" src="{{ url_for('static', filename='images/logo.png') }}" alt="Seri Hijau">
+      <div style="font-size:11px; color:var(--muted); font-weight:600; margin-top:10px; letter-spacing:0.4px;">GUARD SIGN IN</div>
+    </div>
+
+    <div class="panel-body" style="padding:24px 28px 28px;">
+      {% if error %}
+      <div style="background:var(--accent-red-tint); color:var(--accent-red); border-radius:8px; padding:10px 12px; font-size:12.5px; font-weight:600; margin-bottom:16px;">
+        {{ error }}
+      </div>
+      {% endif %}
+
+      <form method="POST" action="/login">
+        <div class="field">
+          <label>Username</label>
+          <input type="text" name="username" required autofocus autocomplete="username">
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" name="password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%; margin-top:4px;">Sign In</button>
+      </form>
+
+      <p style="font-size:11px; color:var(--muted); text-align:center; margin-top:18px;">
+        No account? Ask your head guard to create one via <code style="font-family:var(--mono);">create_guard.py</code>.
+      </p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

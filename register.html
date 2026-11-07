@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Register Plate - Plate Checkpoint</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script>(function(){try{var t=localStorage.getItem('theme');if(t=='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
+</head>
+<body>
+
+<div class="app-shell">
+  {% set active_page = 'register' %}
+  {% include '_sidebar.html' %}
+
+  <div class="main">
+    <div class="main-header">
+      <div>
+        <h1>Register Plate</h1>
+        <p>Capture a vehicle and add its plate to the authorized list</p>
+      </div>
+      <span class="status-pill on"><span class="dot"></span> Registering as {{ session.get('guard_name', 'Guard') }}</span>
+    </div>
+
+    <!-- STEP TRACK -->
+    <div class="reg-steps" id="reg-steps">
+      <div class="reg-step active" id="step-1">
+        <div class="reg-step-dot">1</div>
+        <div class="reg-step-label">
+          <div class="t">Position</div>
+          <div class="s">Frame the plate in the guide</div>
+        </div>
+      </div>
+      <div class="reg-step-line"></div>
+      <div class="reg-step" id="step-2">
+        <div class="reg-step-dot">2</div>
+        <div class="reg-step-label">
+          <div class="t">Capture &amp; Read</div>
+          <div class="s">Auto-detect the plate text</div>
+        </div>
+      </div>
+      <div class="reg-step-line"></div>
+      <div class="reg-step" id="step-3">
+        <div class="reg-step-dot">3</div>
+        <div class="reg-step-label">
+          <div class="t">Confirm Details</div>
+          <div class="s">Save to the authorized list</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="console-grid" style="grid-template-columns: 1.15fr 1fr;">
+      <div class="col">
+        <div class="panel reg-cam-panel">
+          <div class="panel-header">
+            <span class="panel-title"><svg class="icon" viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Live Capture</span>
+            <span class="status-pill on" id="cam-hint-pill"><span class="dot"></span> CAM-01 READY</span>
+          </div>
+          <div class="viewfinder reg-viewfinder">
+            <div class="live-badge"><span class="pulse"></span> LIVE</div>
+            <div class="reg-guide-frame"></div>
+            <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+            <img src="{{ url_for('video_feed') }}" alt="live feed">
+            <div class="reg-guide-caption">Align the number plate inside the frame</div>
+            <div class="feed-watermark">CAM-01 · MAIN GATE</div>
+          </div>
+          <div class="panel-body">
+            <button class="btn btn-primary reg-capture-btn" id="capture-btn" onclick="capturePlate()">
+              <svg class="icon" viewBox="0 0 24 24" style="stroke:#fff"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Capture &amp; Detect Plate
+            </button>
+            <p class="reg-hint" id="auto-status">Auto-detect is ON — as soon as a plate appears in frame it is read automatically. You can also press the button to capture manually.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="panel reg-confirm-panel">
+          <div class="panel-header">
+            <span class="panel-title"><svg class="icon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 17.01"/></svg>Registration Confirmation</span>
+          </div>
+          <div class="panel-body">
+            <div id="preview-empty" class="reg-empty">
+              <div class="reg-empty-art">
+                <svg class="icon" viewBox="0 0 24 24" style="width:30px;height:30px"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              </div>
+              <div class="t">No plate captured yet</div>
+              <div class="s">Point the number plate at the camera — it is read automatically and the result appears here.</div>
+            </div>
+
+            <div id="preview-result" style="display:none;">
+              <div class="reg-capture-card">
+                <img id="captured-photo" class="reg-capture-photo" src="" alt="captured plate">
+                <div class="reg-capture-overlay">
+                  <span id="detected-chip" class="plate-chip lg status-unregistered static">-</span>
+                  <p class="reg-conf-text" id="confidence-text"></p>
+                </div>
+              </div>
+
+              <form id="register-form" onsubmit="submitRegister(event)">
+                <div class="reg-field-group">
+                  <div class="reg-field-group-label">Plate</div>
+                  <div class="field"><label>Plate Number</label><input type="text" id="plate_number" class="mono" required></div>
+                </div>
+
+                <div class="reg-field-group">
+                  <div class="reg-field-group-label">Access Type</div>
+                  <div style="display:flex; gap:8px; margin-bottom:12px;">
+                    <button type="button" class="date-tab active" id="access-permanent-btn" onclick="setAccessType(false)" style="flex:1; text-align:center; padding:8px;">Permanent (Resident)</button>
+                    <button type="button" class="date-tab" id="access-visitor-btn" onclick="setAccessType(true)" style="flex:1; text-align:center; padding:8px;">Visitor (temporary)</button>
+                  </div>
+                  <div class="field" id="visitor-expiry-field" style="display:none; margin-bottom:0;">
+                    <label>Expires After</label>
+                    <select id="expiry_hours">
+                      <option value="4">4 hours</option>
+                      <option value="12">12 hours</option>
+                      <option value="24" selected>1 day</option>
+                      <option value="72">3 days</option>
+                      <option value="168">7 days</option>
+                    </select>
+                    <p style="font-size:10.5px; color:var(--muted); margin:6px 0 0;">This plate is auto-removed from the whitelist once it expires - no manual cleanup needed.</p>
+                  </div>
+                </div>
+
+                <div class="reg-field-group">
+                  <div class="reg-field-group-label">Vehicle</div>
+                  <div class="field-row">
+                    <div class="field"><label>Vehicle Type</label>
+                      <select id="car_type">
+                        <option value="">Select</option><option>Sedan</option><option>SUV</option><option>MPV</option>
+                        <option>Hatchback</option><option>Van</option><option>Pickup</option><option>Motorcycle</option><option>Other</option>
+                      </select>
+                    </div>
+                    <div class="field"><label>Vehicle Color</label><input type="text" id="car_color" placeholder="e.g. White"></div>
+                  </div>
+                </div>
+
+                <div class="reg-field-group">
+                  <div class="reg-field-group-label">Resident</div>
+                  <div class="field-row">
+                    <div class="field"><label>Owner Name</label><input type="text" id="owner_name" placeholder="e.g. John Tan"></div>
+                    <div class="field"><label>House No.</label><input type="text" id="house_no" placeholder="e.g. No. 12, Jalan Hijau 3"></div>
+                  </div>
+                </div>
+
+                <input type="hidden" id="photo_path">
+                <button type="submit" class="btn btn-primary" style="width:100%;">
+                  <svg class="icon" viewBox="0 0 24 24" style="stroke:#fff"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 17.01"/></svg>
+                  Register This Plate
+                </button>
+              </form>
+            </div>
+
+            <div id="preview-success" class="reg-success" style="display:none;">
+              <div class="reg-success-check">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div class="t">Plate registered</div>
+              <div class="s" id="reg-success-plate"></div>
+            </div>
+
+            <div id="status-message" class="reg-status"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let isVisitorAccess = false;
+function setAccessType(isVisitor) {
+  isVisitorAccess = isVisitor;
+  document.getElementById('access-permanent-btn').classList.toggle('active', !isVisitor);
+  document.getElementById('access-visitor-btn').classList.toggle('active', isVisitor);
+  document.getElementById('visitor-expiry-field').style.display = isVisitor ? 'block' : 'none';
+}
+
+function setStep(n) {
+  document.querySelectorAll('.reg-step').forEach((el, i) => {
+    el.classList.toggle('active', i === n - 1);
+    el.classList.toggle('done', i < n - 1);
+  });
+}
+
+const CAPTURE_BTN_HTML = '<svg class="icon" viewBox="0 0 24 24" style="stroke:#fff"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Capture & Detect Plate';
+let captureBusy = false;
+let autoBusy = false;
+let formEdited = false;      // user dah mula taip/edit borang -> jangan timpa
+let currentPlate = '';       // plat yang sedang dipaparkan
+let currentOcrConf = 0;      // confidence OCR bagi bacaan semasa
+let lastSeenText = '';       // untuk pengesahan 2 bacaan sama berturut-turut
+
+async function capturePlate(isAuto) {
+  if (captureBusy) return false;
+  captureBusy = true;
+  const btn = document.getElementById('capture-btn');
+  const statusEl = document.getElementById('status-message');
+  const autoEl = document.getElementById('auto-status');
+  btn.disabled = true; btn.innerHTML = '<span class="reg-spinner"></span> Detecting...'; statusEl.textContent = ''; statusEl.className = 'reg-status';
+
+  try {
+    const res = await fetch('/api/capture', { method: 'POST' });
+    const data = await res.json();
+
+    if (data.status === 'no_plate') {
+      if (!isAuto) { autoEl.textContent = data.message; }
+      return false;
+    }
+    if (data.error) { statusEl.textContent = data.error; statusEl.classList.add('err'); autoEl.textContent = data.error; return false; }
+
+    document.getElementById('preview-empty').style.display = 'none';
+    document.getElementById('preview-success').style.display = 'none';
+    document.getElementById('preview-result').style.display = 'block';
+    document.getElementById('detected-chip').textContent = data.suggested_plate || '(unreadable)';
+    document.getElementById('confidence-text').textContent = `Detection ${(data.confidence*100).toFixed(0)}% · OCR ${(data.ocr_confidence*100).toFixed(0)}%`;
+    document.getElementById('plate_number').value = data.suggested_plate;
+    document.getElementById('photo_path').value = data.photo_path;
+    document.getElementById('captured-photo').src = '/' + data.photo_path + '?t=' + Date.now();
+    autoEl.textContent = `Plate ${data.suggested_plate || '(unreadable)'} detected. Keep the plate in frame for a better reading, or press the button to re-scan.`;
+    currentPlate = data.suggested_plate || '';
+    currentOcrConf = data.ocr_confidence || 0;
+    setStep(3);
+    return true;
+  } catch (err) {
+    statusEl.textContent = 'Connection error.'; statusEl.classList.add('err');
+    return false;
+  } finally {
+    captureBusy = false;
+    btn.disabled = false;
+    btn.innerHTML = CAPTURE_BTN_HTML;
+  }
+}
+
+// ---- AUTO-DETECT: poll ringan. Sebaik sahaja ada bacaan plat yang munasabah, terus capture.
+//      Selepas itu terus pantau: kalau bacaan LEBIH BAIK muncul (dan borang belum diedit), kemas kini. ----
+async function autoPoll() {
+  if (autoBusy || captureBusy || document.hidden) return;
+  autoBusy = true;
+  try {
+    const res = await fetch('/api/live_plate');
+    if (res.status === 401) { return; }
+    const d = await res.json();
+    if (!d.found || !d.text) { lastSeenText = ''; return; }
+
+    const strong = (d.ocr_confidence || 0) >= 0.7;
+    const confirmed = strong || d.text === lastSeenText;   // bacaan kuat = terus; kalau tak, perlu 2 bacaan sama
+    lastSeenText = d.text;
+    if (!confirmed) return;
+
+    if (!currentPlate) {
+      await capturePlate(true);                             // pertama kali nampak plat -> terus
+    } else if (!formEdited && d.text !== currentPlate && (d.ocr_confidence || 0) > currentOcrConf + 0.1) {
+      await capturePlate(true);                             // bacaan lebih yakin -> ganti
+    }
+  } catch (e) { /* abaikan - cuba lagi pusingan seterusnya */ }
+  finally { autoBusy = false; }
+}
+setInterval(autoPoll, 600);
+document.addEventListener('DOMContentLoaded', () => {
+  const f = document.getElementById('register-form');
+  if (f) f.addEventListener('input', () => { formEdited = true; });
+});
+
+async function submitRegister(e) {
+  e.preventDefault();
+  const statusEl = document.getElementById('status-message');
+  statusEl.className = 'reg-status';
+  const payload = {
+    plate_number: document.getElementById('plate_number').value.trim(),
+    owner_name: document.getElementById('owner_name').value.trim(),
+    car_type: document.getElementById('car_type').value.trim(),
+    car_color: document.getElementById('car_color').value.trim(),
+    house_no: document.getElementById('house_no').value.trim(),
+    photo_path: document.getElementById('photo_path').value,
+    is_visitor: isVisitorAccess,
+    expiry_hours: isVisitorAccess ? document.getElementById('expiry_hours').value : null,
+  };
+  const res = await fetch('/api/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const data = await res.json();
+  if (data.error) { statusEl.textContent = data.error; statusEl.classList.add('err'); }
+  else {
+    const wasVisitor = isVisitorAccess;
+    document.getElementById('preview-result').style.display = 'none';
+    document.getElementById('reg-success-plate').textContent = data.message || payload.plate_number;
+    document.getElementById('preview-success').style.display = 'flex';
+    document.getElementById('register-form').reset();
+    setAccessType(false);
+    setTimeout(() => { window.location.href = '/'; }, wasVisitor ? 2200 : 1400);
+  }
+}
+</script>
+
+</body>
+</html>

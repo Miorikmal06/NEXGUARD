@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Residents - Plate Checkpoint</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="app-shell">
+  {% set active_page = 'residents' %}
+  {% include '_sidebar.html' %}
+
+  <div class="main">
+    <div class="main-header">
+      <div>
+        <h1>Residents</h1>
+        <p>Head Guard only - residents listed here are the only people allowed to use the Telegram bot</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title"><svg class="icon" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Resident Accounts <span class="badge" id="resident-count" style="margin-left:6px;">0</span></span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <input type="text" id="resident-search" placeholder="Search name / house / plate" oninput="renderResidents()" style="padding:7px 10px; font-size:12.5px; border:1px solid var(--border); border-radius:8px; background:var(--panel); color:var(--text);">
+          <button class="btn btn-primary" style="padding:8px 14px; font-size:12.5px;" onclick="openResidentModal()">+ Add Resident</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div id="residents-list">
+          <div class="empty-state">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Add / Edit Resident -->
+<div class="modal-overlay" id="resident-modal">
+  <div class="modal-box" style="max-width:380px;">
+    <button class="modal-close" onclick="closeModal('resident-modal')">&times;</button>
+    <h3 style="margin:0 0 16px;" id="resident-modal-title">Add Resident</h3>
+    <form id="resident-form" onsubmit="submitResident(event)">
+      <div class="field"><label>Full Name</label><input type="text" id="rs_full_name" placeholder="e.g. Ahmad bin Ali" required></div>
+      <div class="field"><label>House / Unit No.</label><input type="text" id="rs_house_no" placeholder="e.g. No. 12, Jalan Hijau 3" required></div>
+      <div class="field"><label>Phone No. (used for Telegram)</label><input type="tel" id="rs_phone" placeholder="e.g. 012-3456789" required></div>
+      <p style="font-size:10.5px; color:var(--muted); margin:-6px 0 12px;">The resident links their Telegram account by sharing this exact phone number with the bot. Changing the phone number unlinks Telegram.</p>
+      <div id="resident-status" style="font-size:12.5px; margin-bottom:10px;"></div>
+      <button type="submit" class="btn btn-primary" style="width:100%;" id="resident-submit-btn">Add Resident</button>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: Link Plates -->
+<div class="modal-overlay" id="plates-modal">
+  <div class="modal-box" style="max-width:420px;">
+    <button class="modal-close" onclick="closeModal('plates-modal')">&times;</button>
+    <h3 style="margin:0 0 4px;">Link Plates</h3>
+    <p style="font-size:12.5px; color:var(--muted); margin:0 0 14px;" id="plates-modal-target"></p>
+    <div class="item-list" id="plates-checklist" style="max-height:320px; margin-bottom:12px;"></div>
+    <p style="font-size:10.5px; color:var(--muted); margin:0 0 12px;">Only resident (non-visitor) plates are listed. Plates with the same house no. are shown first. Linked plates trigger an entry notification to the resident on Telegram.</p>
+    <div id="plates-status" style="font-size:12.5px; margin-bottom:10px;"></div>
+    <button class="btn btn-primary" style="width:100%;" onclick="submitPlates()">Save Linked Plates</button>
+  </div>
+</div>
+
+<script>
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(ov => { ov.addEventListener('click', e => { if (e.target === ov) ov.classList.remove('open'); }); });
+
+// Every value from the database goes through esc() before being placed in HTML.
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function formatDate(iso) {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+function displayPhone(phone) {
+  if (!phone) return '-';
+  return phone.startsWith('60') ? '0' + phone.slice(2) : '+' + phone;
+}
+function normHouse(h) { return String(h || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+
+let residentsCache = [];
+let linkablePlates = [];
+
+async function loadResidents() {
+  const list = document.getElementById('residents-list');
+  try {
+    const res = await fetch('/api/admin/residents');
+    const data = await res.json();
+    if (data.error) { list.innerHTML = `<div class="empty-state">${esc(data.error)}</div>`; return; }
+    residentsCache = data.residents || [];
+    linkablePlates = data.linkable_plates || [];
+    renderResidents();
+  } catch (e) {
+    list.innerHTML = '<div class="empty-state">Could not load residents. Has migrations_telegram.sql been run in Supabase?</div>';
+  }
+}
+
+function renderResidents() {
+  const list = document.getElementById('residents-list');
+  const q = document.getElementById('resident-search').value.trim().toLowerCase();
+  const rows = residentsCache.filter(r => !q
+    || (r.full_name || '').toLowerCase().includes(q)
+    || (r.house_no || '').toLowerCase().includes(q)
+    || r.plates.some(p => (p.plate_number || '').toLowerCase().includes(q)));
+  document.getElementById('resident-count').textContent = residentsCache.filter(r => r.is_active).length;
+
+  if (!rows.length) {
+    list.innerHTML = `<div class="empty-state">${residentsCache.length ? 'No residents match your search.' : 'No residents yet - add one to let them use the Telegram bot.'}</div>`;
+    return;
+  }
+
+  list.innerHTML = rows.map(r => {
+    const ownPlates = r.plates.filter(p => !p.is_visitor);
+    const platesHtml = ownPlates.length
+      ? ownPlates.map(p => `<span class="plate-chip status-registered static" style="font-size:11px; padding:2px 6px;">${esc(p.plate_number)}</span>`).join(' ')
+      : '<span style="color:var(--muted);">–</span>';
+    const tgHtml = r.telegram_chat_id
+      ? `<span class="badge registered">Telegram linked ${esc(formatDate(r.telegram_linked_at))}</span>`
+      : '<span class="badge manual">Telegram not linked yet</span>';
+    const inactive = r.is_active === false;
+    return `
+      <div class="plate-row" style="${inactive ? 'opacity:0.55;' : ''} cursor:default; align-items:flex-start;">
+        <div>
+          <div style="font-weight:700; font-size:13px;">${esc(r.full_name)}
+            ${inactive ? '<span class="badge" style="margin-left:6px; background:var(--muted); color:#fff;">Deactivated</span>' : ''}</div>
+          <div class="owner">${esc(r.house_no)} · ${esc(displayPhone(r.phone))}</div>
+          <div style="margin-top:6px; display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:12px;">
+            <span style="color:var(--muted);">Plates:</span> ${platesHtml} ${tgHtml}
+          </div>
+        </div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+          ${inactive
+            ? `<button class="btn-del" onclick="setActive(${Number(r.id)}, true)">Reactivate</button>`
+            : `<button class="btn-del" onclick="openResidentModal(${Number(r.id)})">Edit</button>
+               <button class="btn-del" onclick="openPlatesModal(${Number(r.id)})">Link Plates</button>
+               ${r.telegram_chat_id ? `<button class="btn-del" onclick="unlinkTelegram(${Number(r.id)})">Unlink Telegram</button>` : ''}
+               <button class="btn-del" onclick="setActive(${Number(r.id)}, false)">Deactivate</button>`}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* ============ ADD / EDIT ============ */
+let editingResidentId = null;
+
+function openResidentModal(residentId) {
+  editingResidentId = residentId || null;
+  const r = residentsCache.find(x => x.id === residentId);
+  document.getElementById('resident-form').reset();
+  document.getElementById('resident-status').textContent = '';
+  document.getElementById('resident-modal-title').textContent = r ? 'Edit Resident' : 'Add Resident';
+  document.getElementById('resident-submit-btn').textContent = r ? 'Save Changes' : 'Add Resident';
+  if (r) {
+    document.getElementById('rs_full_name').value = r.full_name || '';
+    document.getElementById('rs_house_no').value = r.house_no || '';
+    document.getElementById('rs_phone').value = displayPhone(r.phone);
+  }
+  document.getElementById('resident-modal').classList.add('open');
+}
+
+async function submitResident(e) {
+  e.preventDefault();
+  const statusEl = document.getElementById('resident-status');
+  const body = {
+    full_name: document.getElementById('rs_full_name').value.trim(),
+    house_no: document.getElementById('rs_house_no').value.trim(),
+    phone: document.getElementById('rs_phone').value.trim(),
+  };
+  const url = editingResidentId ? `/api/admin/residents/${editingResidentId}` : '/api/admin/residents';
+  try {
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (data.error) { statusEl.textContent = data.error; statusEl.style.color = 'var(--accent-red)'; return; }
+    statusEl.textContent = data.message; statusEl.style.color = 'var(--accent-green)';
+    await loadResidents();
+    setTimeout(() => closeModal('resident-modal'), 700);
+  } catch (err) {
+    statusEl.textContent = 'Connection error - please try again.'; statusEl.style.color = 'var(--accent-red)';
+  }
+}
+
+/* ============ LINK PLATES ============ */
+let platesTargetId = null;
+
+function openPlatesModal(residentId) {
+  const r = residentsCache.find(x => x.id === residentId);
+  if (!r) return;
+  platesTargetId = residentId;
+  document.getElementById('plates-modal-target').textContent = `For: ${r.full_name} (${r.house_no})`;
+  document.getElementById('plates-status').textContent = '';
+
+  const nameById = Object.fromEntries(residentsCache.map(x => [x.id, x.full_name]));
+  const house = normHouse(r.house_no);
+  const sorted = [...linkablePlates].sort((a, b) => {
+    const am = normHouse(a.house_no) === house ? 0 : 1;
+    const bm = normHouse(b.house_no) === house ? 0 : 1;
+    return am - bm || (a.plate_number || '').localeCompare(b.plate_number || '');
+  });
+
+  const box = document.getElementById('plates-checklist');
+  if (!sorted.length) {
+    box.innerHTML = '<div class="empty-state">No resident plates registered yet - register the plate on the Register page first.</div>';
+  } else {
+    box.innerHTML = sorted.map(p => {
+      const linkedElsewhere = p.resident_id && p.resident_id !== residentId;
+      return `
+        <label class="log-item" style="cursor:pointer; gap:10px; justify-content:flex-start;">
+          <input type="checkbox" value="${Number(p.id)}" ${p.resident_id === residentId ? 'checked' : ''}>
+          <span class="plate-chip status-registered static" style="font-size:12px; padding:3px 7px;">${esc(p.plate_number)}</span>
+          <span style="font-size:11.5px; color:var(--muted);">
+            ${esc(p.owner_name || '-')} · ${esc(p.house_no || '-')}
+            ${linkedElsewhere ? `<br><span style="color:var(--accent-amber);">Currently linked to ${esc(nameById[p.resident_id] || 'another resident')}</span>` : ''}
+          </span>
+        </label>`;
+    }).join('');
+  }
+  document.getElementById('plates-modal').classList.add('open');
+}
+
+async function submitPlates() {
+  const statusEl = document.getElementById('plates-status');
+  const plate_ids = [...document.querySelectorAll('#plates-checklist input[type=checkbox]:checked')].map(cb => Number(cb.value));
+  try {
+    const res = await fetch(`/api/admin/residents/${platesTargetId}/plates`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plate_ids }),
+    });
+    const data = await res.json();
+    if (data.error) { statusEl.textContent = data.error; statusEl.style.color = 'var(--accent-red)'; return; }
+    statusEl.textContent = data.message; statusEl.style.color = 'var(--accent-green)';
+    await loadResidents();
+    setTimeout(() => closeModal('plates-modal'), 700);
+  } catch (err) {
+    statusEl.textContent = 'Connection error - please try again.'; statusEl.style.color = 'var(--accent-red)';
+  }
+}
+
+/* ============ ACTIVATE / UNLINK ============ */
+async function setActive(residentId, active) {
+  const r = residentsCache.find(x => x.id === residentId);
+  if (!active && !confirm(`Deactivate ${r ? r.full_name : 'this resident'}? They will no longer be able to use the Telegram bot.`)) return;
+  const res = await fetch(`/api/admin/residents/${residentId}/${active ? 'reactivate' : 'deactivate'}`, { method: 'POST' });
+  const data = await res.json().catch(() => ({}));
+  if (data.error) { alert(data.error); return; }
+  loadResidents();
+}
+
+async function unlinkTelegram(residentId) {
+  if (!confirm('Unlink this Telegram account? The resident will need to share their phone number with the bot again.')) return;
+  const res = await fetch(`/api/admin/residents/${residentId}/unlink-telegram`, { method: 'POST' });
+  const data = await res.json().catch(() => ({}));
+  if (data.error) { alert(data.error); return; }
+  loadResidents();
+}
+
+loadResidents();
+</script>
+
+</body>
+</html>

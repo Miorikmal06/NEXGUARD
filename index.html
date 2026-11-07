@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plate Checkpoint - Dashboard</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script>(function(){try{var t=localStorage.getItem('theme');if(t=='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
+</head>
+<body>
+
+<div class="app-shell">
+  {% set active_page = 'dashboard' %}
+  {% include '_sidebar.html' %}
+
+  <div class="main">
+
+    <div class="main-header">
+      <div>
+        <h1>Live Monitoring</h1>
+        <p>Real-time plate detection and gate access control</p>
+      </div>
+    </div>
+
+    <!-- KPI STRIP (clickable) -->
+    <div class="kpi-strip">
+      <div class="kpi-card clickable" onclick="openKpiModal('registered')" tabindex="0">
+        <div class="kpi-icon green"><svg class="icon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 17.01"/></svg></div>
+        <div><div class="kpi-num" id="kpi-registered">{{ plates|length }}</div><div class="kpi-label">Registered plates</div></div>
+        <svg class="icon kpi-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+      <div class="kpi-card clickable" onclick="openKpiModal('authorized')" tabindex="0">
+        <div class="kpi-icon blue"><svg class="icon" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+        <div><div class="kpi-num" id="kpi-authorized">-</div><div class="kpi-label">Authorized today</div></div>
+        <svg class="icon kpi-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+      <div class="kpi-card clickable" onclick="openKpiModal('unauthorized')" tabindex="0">
+        <div class="kpi-icon red"><svg class="icon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+        <div><div class="kpi-num" id="kpi-unregistered">-</div><div class="kpi-label">Unauthorized today</div></div>
+        <svg class="icon kpi-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+      <div class="kpi-card clickable" onclick="openKpiModal('manual')" tabindex="0">
+        <div class="kpi-icon amber"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+        <div><div class="kpi-num" id="kpi-manual">-</div><div class="kpi-label">Manual overrides</div></div>
+        <svg class="icon kpi-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>
+
+    <!-- CONSOLE GRID -->
+    <div class="console-grid">
+
+      <!-- COLUMN 1: LIVE FEED + GATE -->
+      <div class="col">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title"><svg class="icon" viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Live Feed</span>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <button class="date-tab" id="mode-auto-btn" onclick="setScanMode('auto')" style="padding:3px 9px; font-size:10.5px;">Auto</button>
+              <button class="date-tab" id="mode-manual-btn" onclick="setScanMode('manual')" style="padding:3px 9px; font-size:10.5px;">Manual</button>
+            </div>
+          </div>
+          <div class="viewfinder">
+            <div class="live-badge"><span class="pulse"></span> LIVE</div>
+            <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+            <img src="{{ url_for('video_feed') }}" alt="live feed">
+            <div class="feed-timestamp" id="feed-timestamp">--</div>
+            <div class="feed-watermark">CAM-01 · MAIN GATE</div>
+          </div>
+          <div class="panel-body">
+            <button class="btn btn-primary" id="scan-now-btn" style="width:100%; display:none; margin-bottom:12px;" onclick="triggerScan()">
+              <svg class="icon" viewBox="0 0 24 24" style="stroke:#fff"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Scan Now
+            </button>
+            <div id="scan-result" style="font-size:11.5px; color:var(--muted); margin-bottom:10px;"></div>
+            <div style="display:flex; gap:8px;">
+              <span class="status-pill" id="camera-status-pill"><span class="dot"></span> CAMERA —</span>
+              <span class="status-pill" id="gate-status-pill"><span class="dot"></span> GATE —</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel gate-panel">
+          <div class="panel-header">
+            <span class="panel-title"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Gate Control</span>
+          </div>
+          <div class="panel-body">
+            <div class="gate-pro-visual">
+              <div class="gate-pro-icon"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+              <div class="gate-pro-status-wrap">
+                <div class="gate-pro-status" id="gate-pro-status">STANDBY</div>
+                <div class="gate-pro-sub">Manual override channel</div>
+              </div>
+            </div>
+            <button class="btn-gate-pro" id="gate-btn" onclick="handleGateOverride()">
+              <span class="btn-gate-pro-fill" id="gate-btn-fill"></span>
+              <span class="btn-gate-pro-label" id="gate-btn-label">
+                <svg class="icon" viewBox="0 0 24 24" style="stroke:#fff"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Manual Gate Override
+              </span>
+            </button>
+            <div class="gate-reason-form" id="gate-reason-form" style="display:none; text-align:left; margin-top:12px;">
+              <div class="field" style="margin-bottom:10px;">
+                <label>Reason <span style="color:var(--accent-red);">*</span></label>
+                <select id="gate-reason-select"></select>
+              </div>
+              <div class="field" style="margin-bottom:12px;">
+                <label>Note <span id="gate-note-hint" style="text-transform:none; font-weight:600; opacity:0.7;">(optional)</span></label>
+                <textarea id="gate-reason-note" rows="2" placeholder="Additional details for the audit log..." style="width:100%; background:var(--panel-soft); border:1px solid var(--border); border-radius:8px; padding:9px 11px; color:var(--text); font-family:var(--sans); font-size:12.5px; resize:vertical;"></textarea>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button class="btn btn-secondary" style="flex:1;" onclick="cancelGateOverride()">Cancel</button>
+                <button class="btn btn-primary" style="flex:1;" id="gate-confirm-btn" onclick="confirmGateOverride()">Confirm &amp; Open</button>
+              </div>
+            </div>
+            <div class="gate-status-text" id="gate-status">Tap to arm, then pick a reason to confirm and let a vehicle through.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COLUMN 2: DETECTION LOG -->
+      <div class="col">
+        <div class="panel" id="alerts-panel" style="display:none;">
+          <div class="panel-header">
+            <span class="panel-title"><svg class="icon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Repeat Visit Alerts</span>
+            <span class="panel-count" id="alert-count">0</span>
+          </div>
+          <div class="panel-body">
+            <div id="alerts-list"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title"><svg class="icon" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Detection Log</span>
+            <div class="panel-header-actions">
+              <button class="btn-ghost-mini" onclick="exportMyLogs()" title="Download all detections from your shift(s) as CSV">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export My Logs
+              </button>
+              <button class="btn-ghost-mini" onclick="openCsvModal()">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import CSV
+              </button>
+              <span class="panel-count" id="log-count">{{ logs|length }}</span>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="date-tabs" id="date-tabs">
+              <button class="date-tab active" data-date="" onclick="selectDate('', this)">Latest</button>
+            </div>
+            <div class="log-timeline" id="log-list">
+              {% if logs %}
+                {% for log in logs %}
+                <div class="log-tl-item status-{{ log.status }}" onclick='openLogModal({{ log | tojson }})'>
+                  <div class="log-tl-rail"><div class="log-tl-dot"></div><div class="log-tl-line"></div></div>
+                  {% if log.snapshot_path %}
+                    <img class="log-tl-thumb" src="/{{ log.snapshot_path }}" alt="">
+                  {% else %}
+                    <div class="log-tl-thumb-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+                  {% endif %}
+                  <div class="log-tl-meta">
+                    <div class="log-tl-top">
+                      <span class="log-tl-plate">{{ log.plate_number }}</span>
+                      <span class="badge {{ log.status }}">{{ 'Authorized' if log.status == 'registered' else ('Manual' if log.status == 'manual' else 'Unauthorized') }}</span>
+                    </div>
+                    <span class="log-tl-time" data-ts="{{ log.timestamp }}"></span>
+                  </div>
+                </div>
+                {% endfor %}
+              {% else %}
+                <div class="empty-state"><svg class="icon" viewBox="0 0 24 24" style="width:26px;height:26px"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><div>No detections yet.</div></div>
+              {% endif %}
+            </div>
+            <a href="/analytics" class="analytics-teaser-link">
+              View full activity & reports
+              <svg class="icon" viewBox="0 0 24 24" style="width:12px;height:12px"><polyline points="9 18 15 12 9 6"/></svg>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- COLUMN 3: REGISTERED PLATES -->
+      <div class="col col-3">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title"><svg class="icon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 17.01"/></svg>Registered Plates</span>
+            <a href="/register" style="font-size:11px; color:var(--accent-green); text-decoration:none; font-weight:700;">+ Add</a>
+          </div>
+          <div class="panel-body">
+            <div class="search-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="plate-search" placeholder="Search plate or owner..." oninput="filterPlates()">
+            </div>
+            <div class="item-list" id="registered-list" style="max-height:340px;">
+              {% if plates %}
+                {% for p in plates %}
+                <div class="plate-row" data-id="{{ p.id }}" data-search="{{ (p.plate_number ~ ' ' ~ (p.owner_name or ''))|lower }}" onclick='openPlateModal({{ p | tojson }})'>
+                  <div>
+                    <span class="plate-chip status-registered" style="font-size:12px; padding:3px 7px;">{{ p.plate_number }}</span>
+                    {% if p.owner_name %}<div class="owner">{{ p.owner_name }}</div>{% endif %}
+                  </div>
+                  <button class="btn-del" onclick="event.stopPropagation(); deletePlate({{ p.id }})">Remove</button>
+                </div>
+                {% endfor %}
+              {% else %}
+                <div class="empty-state"><svg class="icon" viewBox="0 0 24 24" style="width:26px;height:26px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 17.01"/></svg><div>No plates registered yet.</div></div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="plate-modal">
+  <div class="modal-box"><button class="modal-close" onclick="closeModal('plate-modal')">&times;</button><div id="plate-modal-body"></div></div>
+</div>
+<div class="modal-overlay" id="log-modal">
+  <div class="modal-box"><button class="modal-close" onclick="closeModal('log-modal')">&times;</button><div id="log-modal-body"></div></div>
+</div>
+<div class="modal-overlay" id="kpi-modal">
+  <div class="modal-box" style="max-width:480px;">
+    <button class="modal-close" onclick="closeModal('kpi-modal')">&times;</button>
+    <h3 id="kpi-modal-title" style="margin:0 0 14px; font-size:15px;"></h3>
+    <div id="kpi-modal-body"></div>
+  </div>
+</div>
+<div class="modal-overlay" id="csv-modal">
+  <div class="modal-box" style="max-width:420px;">
+    <button class="modal-close" onclick="closeModal('csv-modal')">&times;</button>
+    <h3 style="margin:0 0 14px; font-size:15px;">Import Detection Logs (CSV)</h3>
+    <div class="csv-drop" onclick="document.getElementById('csv-file-input').click()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <div class="t">Click to choose a CSV file</div>
+      <div class="s">or drag it here</div>
+    </div>
+    <input type="file" id="csv-file-input" accept=".csv" style="display:none;" onchange="handleCsvSelect(event)">
+    <div class="csv-filename" id="csv-filename"></div>
+    <div class="csv-format-hint">
+      Columns: <code>plate_number</code> (required), <code>status</code> <span style="opacity:0.7;">(registered / unregistered / manual)</span>, <code>timestamp</code>, <code>confidence</code>, <code>performed_by</code>
+      <br><span style="opacity:0.7;">Don't have a file ready? Use <b>Export My Logs</b> above to auto-generate one - it pulls every detection during your shift(s), in this exact format.</span>
+    </div>
+    <button class="btn btn-primary" style="width:100%; margin-top:14px;" id="csv-import-btn" onclick="submitCsvImport()" disabled>Import Logs</button>
+    <div class="reg-status" id="csv-status"></div>
+  </div>
+</div>
+
+<script>
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(ov => { ov.addEventListener('click', e => { if (e.target === ov) ov.classList.remove('open'); }); });
+
+function formatLocalTime(iso) {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+}
+function formatShortTime(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+function applyTimeFormatting() {
+  document.querySelectorAll('[data-ts]').forEach(el => { el.textContent = formatLocalTime(el.getAttribute('data-ts')); });
+}
+function statusLabel(status) {
+  if (status === 'registered') return 'Authorized';
+  if (status === 'manual') return 'Manual Override';
+  return 'Unauthorized';
+}
+
+function openPlateModal(p) {
+  const body = document.getElementById('plate-modal-body');
+  const photoHtml = p.photo_path ? `<img class="modal-photo" src="/${p.photo_path}">` : '';
+  body.innerHTML = `${photoHtml}
+    <div style="text-align:center; margin-bottom:16px;"><span class="plate-chip lg status-registered static">${p.plate_number}</span></div>
+    <div class="detail-row"><span class="k">Owner name</span><span class="v">${p.owner_name || '-'}</span></div>
+    <div class="detail-row"><span class="k">House no.</span><span class="v">${p.house_no || '-'}</span></div>
+    <div class="detail-row"><span class="k">Vehicle type</span><span class="v">${p.car_type || '-'}</span></div>
+    <div class="detail-row"><span class="k">Vehicle color</span><span class="v">${p.car_color || '-'}</span></div>
+    <div class="detail-row"><span class="k">Registered on</span><span class="v">${formatLocalTime(p.registered_at)}</span></div>
+    <div class="detail-row"><span class="k">Registered by</span><span class="v">${p.registered_by || '-'}</span></div>`;
+  document.getElementById('plate-modal').classList.add('open');
+}
+
+function openLogModal(log) {
+  const body = document.getElementById('log-modal-body');
+  const photoHtml = log.snapshot_path ? `<img class="modal-photo" src="/${log.snapshot_path}">` : '';
+  body.innerHTML = `${photoHtml}
+    <div style="text-align:center; margin-bottom:16px;"><span class="plate-chip lg status-${log.status} static">${log.plate_number}</span></div>
+    <div class="detail-row"><span class="k">Status</span><span class="v">${statusLabel(log.status)}</span></div>
+    ${log.performed_by ? `<div class="detail-row"><span class="k">Performed by (guard on duty)</span><span class="v">${log.performed_by}</span></div>` : ''}
+    ${log.status === 'manual' && log.reason_code ? `<div class="detail-row"><span class="k">Reason</span><span class="v">${REASON_LABELS[log.reason_code] || log.reason_code}</span></div>` : ''}
+    ${log.status === 'manual' && log.note ? `<div class="detail-row"><span class="k">Note</span><span class="v">${log.note}</span></div>` : ''}
+    <div class="detail-row"><span class="k">Time</span><span class="v">${formatLocalTime(log.timestamp)}</span></div>
+    ${log.confidence ? `<div class="detail-row"><span class="k">Detection confidence</span><span class="v">${(log.confidence*100).toFixed(0)}%</span></div>` : ''}`;
+  document.getElementById('log-modal').classList.add('open');
+}
+
+async function deletePlate(id) {
+  if (!confirm('Remove this plate?')) return;
+  await fetch(`/api/plates/${id}`, { method: 'DELETE' });
+  document.querySelector(`.plate-row[data-id="${id}"]`).remove();
+}
+
+function filterPlates() {
+  const q = document.getElementById('plate-search').value.toLowerCase();
+  document.querySelectorAll('#registered-list .plate-row').forEach(row => {
+    row.style.display = row.getAttribute('data-search').includes(q) ? '' : 'none';
+  });
+}
+
+/* ============ GATE OVERRIDE: ARM -> PICK REASON -> CONFIRM ============ */
+let gateArmed = false;
+let gateArmTimeout = null;
+let REASON_LABELS = {};
+
+async function loadGateReasons() {
+  try {
+    const res = await fetch('/api/gate/reasons');
+    const reasons = await res.json();
+    const sel = document.getElementById('gate-reason-select');
+    sel.innerHTML = '<option value="">Select a reason...</option>' + reasons.map(r => `<option value="${r.value}">${r.label}</option>`).join('');
+    reasons.forEach(r => { REASON_LABELS[r.value] = r.label; });
+  } catch (e) { /* reason dropdown just stays empty; confirm will fail server-side with a clear error */ }
+}
+document.getElementById('gate-reason-select').addEventListener('change', (e) => {
+  document.getElementById('gate-note-hint').textContent = e.target.value === 'other' ? '(required for "Other")' : '(optional)';
+});
+
+function resetGateButton() {
+  gateArmed = false;
+  clearTimeout(gateArmTimeout);
+  const btn = document.getElementById('gate-btn');
+  const fill = document.getElementById('gate-btn-fill');
+  const label = document.getElementById('gate-btn-label');
+  btn.classList.remove('armed');
+  btn.style.display = 'flex';
+  fill.classList.remove('draining');
+  fill.style.width = '0%';
+  label.innerHTML = '<svg class="icon" viewBox="0 0 24 24" style="stroke:#fff"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Manual Gate Override';
+  document.getElementById('gate-reason-form').style.display = 'none';
+  document.getElementById('gate-reason-select').value = '';
+  document.getElementById('gate-reason-note').value = '';
+  document.getElementById('gate-note-hint').textContent = '(optional)';
+  document.getElementById('gate-status').textContent = 'Tap to arm, then pick a reason to confirm and let a vehicle through.';
+}
+
+function cancelGateOverride() { resetGateButton(); }
+
+function handleGateOverride() {
+  if (gateArmed) return;
+  gateArmed = true;
+  const btn = document.getElementById('gate-btn');
+  btn.classList.add('armed');
+  btn.style.display = 'none';
+  document.getElementById('gate-reason-form').style.display = 'block';
+  document.getElementById('gate-status').textContent = 'Armed - pick a reason below. Auto-cancels in 30s if left idle.';
+  gateArmTimeout = setTimeout(resetGateButton, 30000);
+}
+
+async function confirmGateOverride() {
+  const reasonCode = document.getElementById('gate-reason-select').value;
+  const note = document.getElementById('gate-reason-note').value.trim();
+  const statusEl = document.getElementById('gate-status');
+
+  if (!reasonCode) { statusEl.textContent = 'Please select a reason before confirming.'; statusEl.style.color = 'var(--accent-red)'; return; }
+  if (reasonCode === 'other' && !note) { statusEl.textContent = 'Please add a short note for "Other".'; statusEl.style.color = 'var(--accent-red)'; return; }
+
+  clearTimeout(gateArmTimeout);
+  const confirmBtn = document.getElementById('gate-confirm-btn');
+  confirmBtn.disabled = true;
+  confirmBtn.innerHTML = '<span class="reg-spinner"></span> Opening gate...';
+  statusEl.style.color = '';
+  document.getElementById('gate-pro-status').textContent = 'OPENING';
+
+  try {
+    const res = await fetch('/api/gate/manual', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason_code: reasonCode, note }),
+    });
+    const data = await res.json();
+    statusEl.textContent = data.message || data.error;
+    if (data.error) statusEl.style.color = 'var(--accent-red)';
+    document.getElementById('gate-pro-status').textContent = data.error ? 'ERROR' : 'GATE OPENED';
+  } catch (e) {
+    statusEl.textContent = 'Connection error.';
+    statusEl.style.color = 'var(--accent-red)';
+    document.getElementById('gate-pro-status').textContent = 'ERROR';
+  } finally {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'Confirm & Open';
+    setTimeout(() => {
+      resetGateButton();
+      document.getElementById('gate-pro-status').textContent = 'STANDBY';
+      refreshLogs();
+      loadKpis();
+    }, 900);
+  }
+}
+loadGateReasons();
+
+let currentDate = '';
+async function loadDateTabs() {
+  const res = await fetch('/api/logs/dates');
+  const dates = await res.json();
+  const container = document.getElementById('date-tabs');
+  const tabsHtml = dates.map(d => `<button class="date-tab" data-date="${d}" onclick="selectDate('${d}', this)">${d}</button>`).join('');
+  container.innerHTML = `<button class="date-tab ${currentDate === '' ? 'active' : ''}" data-date="" onclick="selectDate('', this)">Latest</button>` + tabsHtml;
+}
+function selectDate(date, btnEl) {
+  currentDate = date;
+  document.querySelectorAll('.date-tab').forEach(b => b.classList.remove('active'));
+  btnEl.classList.add('active');
+  refreshLogs();
+}
+function logThumbHtml(log) {
+  if (log.snapshot_path) return `<img class="log-tl-thumb" src="/${log.snapshot_path}" alt="">`;
+  return `<div class="log-tl-thumb-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>`;
+}
+function renderLogs(logs) {
+  const list = document.getElementById('log-list');
+  document.getElementById('log-count').textContent = logs.length;
+  if (logs.length === 0) { list.innerHTML = '<div class="empty-state">No detections for this view.</div>'; return; }
+  list.innerHTML = logs.map(log => `
+    <div class="log-tl-item status-${log.status}" onclick='openLogModal(${JSON.stringify(log)})'>
+      <div class="log-tl-rail"><div class="log-tl-dot"></div><div class="log-tl-line"></div></div>
+      ${logThumbHtml(log)}
+      <div class="log-tl-meta">
+        <div class="log-tl-top">
+          <span class="log-tl-plate">${log.plate_number}</span>
+          <span class="badge ${log.status}">${statusLabel(log.status)}</span>
+        </div>
+        <span class="log-tl-time">${formatLocalTime(log.timestamp)}</span>
+      </div>
+    </div>`).join('');
+}
+async function refreshLogs() {
+  const url = currentDate ? `/api/logs/by-date?date=${currentDate}` : '/api/logs?limit=8';
+  const res = await fetch(url);
+  renderLogs(await res.json());
+}
+
+async function loadScanMode() {
+  const res = await fetch('/api/scan/mode');
+  updateModeButtons((await res.json()).mode);
+}
+function updateModeButtons(mode) {
+  document.getElementById('mode-auto-btn').classList.toggle('active', mode === 'auto');
+  document.getElementById('mode-manual-btn').classList.toggle('active', mode === 'manual');
+  document.getElementById('scan-now-btn').style.display = mode === 'manual' ? 'flex' : 'none';
+}
+async function setScanMode(mode) {
+  const res = await fetch('/api/scan/mode', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }) });
+  updateModeButtons((await res.json()).mode);
+  document.getElementById('scan-result').textContent = '';
+}
+async function triggerScan() {
+  const btn = document.getElementById('scan-now-btn');
+  const resultEl = document.getElementById('scan-result');
+  btn.disabled = true; btn.textContent = 'Scanning...';
+  try {
+    const res = await fetch('/api/scan/trigger', { method: 'POST' });
+    const data = await res.json();
+    if (data.status === 'no_plate') { resultEl.textContent = data.message; resultEl.style.color = 'var(--accent-amber)'; }
+    else if (data.error) { resultEl.textContent = data.error; resultEl.style.color = 'var(--accent-red)'; }
+    else {
+      resultEl.textContent = `Detected: ${data.detections.map(d => `${d.plate} (${statusLabel(d.status)})`).join(', ')}`;
+      resultEl.style.color = 'var(--accent-green)';
+      refreshLogs(); loadKpis();
+    }
+  } catch (e) { resultEl.textContent = 'Connection error.'; resultEl.style.color = 'var(--accent-red)'; }
+  finally { btn.disabled = false; btn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" style="stroke:#fff"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Scan Now'; }
+}
+
+async function loadSystemStatus() {
+  try {
+    const res = await fetch('/api/system/status');
+    const data = await res.json();
+    const camPill = document.getElementById('camera-status-pill');
+    camPill.className = 'status-pill ' + (data.camera_online ? 'on' : 'off');
+    camPill.innerHTML = `<span class="dot"></span> CAM ${data.camera_online ? 'ONLINE' : 'OFFLINE'}`;
+    const gatePill = document.getElementById('gate-status-pill');
+    gatePill.className = 'status-pill ' + (data.gate_integration ? 'on' : 'off');
+    gatePill.innerHTML = `<span class="dot"></span> GATE ${data.gate_integration ? 'ACTIVE' : 'STANDBY'}`;
+  } catch (e) {}
+}
+async function loadKpis() {
+  try {
+    const res = await fetch('/api/stats/today');
+    const data = await res.json();
+    document.getElementById('kpi-registered').textContent = data.registered_total;
+    document.getElementById('kpi-authorized').textContent = data.authorized_today;
+    document.getElementById('kpi-unregistered').textContent = data.unregistered_today;
+    document.getElementById('kpi-manual').textContent = data.manual_today;
+  } catch (e) {}
+}
+
+/* ============ KPI MODALS ============ */
+const KPI_CONFIG = {
+  registered: { title: 'Registered Plates', kind: 'list-plates' },
+  authorized: { title: 'Authorized Today', kind: 'gallery' },
+  unauthorized: { title: 'Unauthorized Today', kind: 'gallery' },
+  manual: { title: 'Manual Overrides Today', kind: 'list-manual' },
+};
+async function openKpiModal(type) {
+  const cfg = KPI_CONFIG[type];
+  document.getElementById('kpi-modal-title').textContent = cfg.title;
+  const body = document.getElementById('kpi-modal-body');
+  body.innerHTML = '<div class="kpi-list-empty">Loading...</div>';
+  document.getElementById('kpi-modal').classList.add('open');
+
+  try {
+    const res = await fetch(`/api/kpi/${type}`);
+    const data = await res.json();
+
+    if (cfg.kind === 'list-plates') {
+      if (!data.length) { body.innerHTML = '<div class="kpi-list-empty">No plates registered yet.</div>'; return; }
+      body.innerHTML = `<div class="kpi-modal-list">${data.map(p => `
+        <div class="kpi-list-row" onclick='closeModal("kpi-modal"); openPlateModal(${JSON.stringify(p)})'>
+          <div class="meta">
+            <span class="plate-chip status-registered" style="font-size:12px; padding:3px 7px;">${p.plate_number}</span>
+            <span class="time">${p.owner_name || 'No owner name'}</span>
+          </div>
+          <span class="time">by ${p.registered_by || '-'}</span>
+        </div>`).join('')}</div>`;
+    } else if (cfg.kind === 'gallery') {
+      if (!data.length) { body.innerHTML = `<div class="kpi-gallery-empty">No ${type} detections today.</div>`; return; }
+      body.innerHTML = `<div class="kpi-modal-gallery">${data.map(log => `
+        <div class="kpi-gallery-item" onclick='closeModal("kpi-modal"); openLogModal(${JSON.stringify(log)})'>
+          ${log.snapshot_path ? `<img src="/${log.snapshot_path}">` : `<div class="log-tl-thumb-placeholder" style="width:100%; aspect-ratio:4/3; border-radius:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:22px;height:22px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>`}
+          <div class="cap">
+            <span class="plate-chip status-${log.status}" style="font-size:11px; padding:2px 6px;">${log.plate_number}</span>
+            <span class="time">${formatLocalTime(log.timestamp)}</span>
+          </div>
+        </div>`).join('')}</div>`;
+    } else if (cfg.kind === 'list-manual') {
+      if (!data.length) { body.innerHTML = '<div class="kpi-list-empty">No manual overrides today.</div>'; return; }
+      body.innerHTML = `<div class="kpi-modal-list">${data.map(log => `
+        <div class="kpi-list-row" onclick='closeModal("kpi-modal"); openLogModal(${JSON.stringify(log)})'>
+          <div class="meta">
+            <span class="plate-chip status-manual" style="font-size:12px; padding:3px 7px;">OVERRIDE</span>
+            <span class="time">${log.performed_by || 'Unknown'} &middot; ${REASON_LABELS[log.reason_code] || log.reason_code || 'No reason logged'}</span>
+          </div>
+          <span class="time">${formatLocalTime(log.timestamp)}</span>
+        </div>`).join('')}</div>`;
+    }
+  } catch (e) {
+    body.innerHTML = '<div class="kpi-list-empty">Could not load this data.</div>';
+  }
+}
+
+/* ============ CSV EXPORT ============ */
+async function exportMyLogs() {
+  try {
+    const res = await fetch('/api/logs/export');
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || 'Tak dapat export log buat masa ini.');
+      return;
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename=([^;]+)/);
+    const filename = match ? match[1].trim() : 'my_logs.csv';
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (e) { alert('Connection error semasa export.'); }
+}
+
+/* ============ CSV IMPORT ============ */
+let csvSelectedFile = null;
+function openCsvModal() {
+  csvSelectedFile = null;
+  document.getElementById('csv-filename').textContent = '';
+  document.getElementById('csv-status').textContent = '';
+  document.getElementById('csv-status').className = 'reg-status';
+  document.getElementById('csv-import-btn').disabled = true;
+  document.getElementById('csv-file-input').value = '';
+  document.getElementById('csv-modal').classList.add('open');
+}
+function handleCsvSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  csvSelectedFile = file;
+  document.getElementById('csv-filename').textContent = file.name;
+  document.getElementById('csv-import-btn').disabled = false;
+}
+async function submitCsvImport() {
+  if (!csvSelectedFile) return;
+  const statusEl = document.getElementById('csv-status');
+  const btn = document.getElementById('csv-import-btn');
+  btn.disabled = true; btn.textContent = 'Importing...';
+  statusEl.className = 'reg-status'; statusEl.textContent = '';
+
+  const formData = new FormData();
+  formData.append('file', csvSelectedFile);
+  try {
+    const res = await fetch('/api/logs/import', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.error) { statusEl.textContent = data.error; statusEl.classList.add('err'); }
+    else {
+      statusEl.textContent = data.message;
+      statusEl.style.color = 'var(--accent-green)';
+      refreshLogs(); loadKpis(); loadDateTabs();
+      setTimeout(() => closeModal('csv-modal'), 1400);
+    }
+  } catch (e) { statusEl.textContent = 'Connection error.'; statusEl.classList.add('err'); }
+  finally { btn.disabled = false; btn.textContent = 'Import Logs'; }
+}
+
+function tickClock() {
+  const now = new Date();
+  const opts = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
+  const feedEl = document.getElementById('feed-timestamp');
+  if (feedEl) feedEl.textContent = now.toLocaleTimeString('en-GB', opts);
+}
+
+let _knownAlertIds = new Set();
+let _audioCtx = null;
+let _currentAlerts = [];
+
+function _unlockAudio() {
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  } catch (e) {}
+}
+document.addEventListener('click', _unlockAudio);
+document.addEventListener('keydown', _unlockAudio);
+
+function playAlertBeep() {
+  try {
+    _unlockAudio();
+    if (!_audioCtx) return;
+    [0, 0.35, 0.7].forEach(offset => {
+      const o = _audioCtx.createOscillator();
+      const g = _audioCtx.createGain();
+      o.type = 'square';
+      o.frequency.value = 880;
+      g.gain.value = 0.15;
+      o.connect(g); g.connect(_audioCtx.destination);
+      o.start(_audioCtx.currentTime + offset);
+      o.stop(_audioCtx.currentTime + offset + 0.2);
+    });
+  } catch (e) {}
+}
+
+function _renderBanner(alerts) {
+  const banner = document.getElementById('alert-banner');
+  const text = document.getElementById('alert-banner-text');
+  if (!banner) return;
+  if (!alerts.length) { banner.style.display = 'none'; banner.classList.remove('flash'); return; }
+  const a = alerts[0];
+  const more = alerts.length > 1 ? ` (+${alerts.length - 1} lagi)` : '';
+  text.textContent = `\u26A0 REPEAT VISIT: ${a.plate_number} masuk ${a.occurrence_count}x dalam ${a.window_minutes} minit${more}`;
+  banner.style.display = 'flex';
+  banner.classList.add('flash');
+}
+
+async function loadAlerts() {
+  try {
+    const res = await fetch('/api/alerts?acknowledged=false');
+    if (res.status >= 500) {
+      console.error('[alerts] server error - check Flask console (table "alerts" mungkin belum wujud)');
+      return;
+    }
+    const alerts = await res.json();
+    const panel = document.getElementById('alerts-panel');
+    const listEl = document.getElementById('alerts-list');
+    const countEl = document.getElementById('alert-count');
+    if (!Array.isArray(alerts) || alerts.length === 0) {
+      panel.style.display = 'none';
+      _currentAlerts = [];
+      _renderBanner([]);
+      _knownAlertIds = new Set();
+      return;
+    }
+    _currentAlerts = alerts;
+    // Bunyi + banner bila ada alert BARU yang belum pernah nampak
+    const hasNew = alerts.some(a => !_knownAlertIds.has(a.id));
+    alerts.forEach(a => _knownAlertIds.add(a.id));
+    if (hasNew) playAlertBeep();
+    _renderBanner(alerts);
+
+    panel.style.display = '';
+    countEl.textContent = alerts.length;
+    listEl.innerHTML = alerts.map(a => `
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 0; border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-weight:600; font-size:13px;">${a.plate_number}</div>
+          <div style="font-size:11px; color:var(--muted);">Seen ${a.occurrence_count}x in the last ${a.window_minutes} min &middot; ${new Date(a.created_at).toLocaleString('en-GB')}</div>
+        </div>
+        <button class="btn-ghost-mini" onclick="acknowledgeAlert(${a.id})">Dismiss</button>
+      </div>
+    `).join('');
+  } catch (e) { /* silent - non-critical panel */ }
+}
+
+async function acknowledgeAlert(alertId) {
+  try {
+    await fetch(`/api/alerts/${alertId}/acknowledge`, { method: 'POST' });
+    loadAlerts();
+  } catch (e) {}
+}
+
+async function dismissBannerAlerts() {
+  try {
+    await Promise.all(_currentAlerts.map(a => fetch(`/api/alerts/${a.id}/acknowledge`, { method: 'POST' })));
+  } catch (e) {}
+  loadAlerts();
+}
+
+loadDateTabs();
+loadScanMode();
+loadSystemStatus();
+loadKpis();
+loadAlerts();
+applyTimeFormatting();
+tickClock();
+setInterval(tickClock, 1000);
+setInterval(() => { if (currentDate === '') refreshLogs(); }, 5000);
+setInterval(loadSystemStatus, 10000);
+setInterval(loadKpis, 10000);
+setInterval(loadAlerts, 3000);
+</script>
+
+
+<!-- REPEAT-VISIT ALERT BANNER (sentiasa nampak di atas bila ada alert belum di-dismiss) -->
+<div id="alert-banner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:9999; background:#d62828; color:#fff; padding:12px 20px; font-weight:600; font-size:14px; box-shadow:0 4px 16px rgba(0,0,0,.35); align-items:center; justify-content:space-between; gap:12px;">
+  <span id="alert-banner-text"></span>
+  <button onclick="dismissBannerAlerts()" style="background:#fff; color:#d62828; border:0; border-radius:8px; padding:6px 14px; font-weight:700; cursor:pointer;">Dismiss</button>
+</div>
+<style>@keyframes alertPulse{0%,100%{background:#d62828}50%{background:#8f1010}} #alert-banner.flash{animation:alertPulse 1s infinite}</style>
+
+</body>
+</html>

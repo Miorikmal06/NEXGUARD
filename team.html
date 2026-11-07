@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team - Plate Checkpoint</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="app-shell">
+  {% set active_page = 'team' %}
+  {% include '_sidebar.html' %}
+
+  <div class="main">
+    <div class="main-header">
+      <div>
+        <h1>Team Management</h1>
+        <p>Head Guard only - manage guard accounts and compare shift performance</p>
+      </div>
+    </div>
+
+    <!-- ============ LEADERBOARD ============ -->
+    <div class="panel" style="margin-bottom:18px;">
+      <div class="panel-header">
+        <span class="panel-title"><svg class="icon" viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 4h3a2 2 0 0 1 2 2 5 5 0 0 1-5 5M7 4H4a2 2 0 0 0-2 2 5 5 0 0 0 5 5"/></svg>Performance Leaderboard</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="date-range-tabs" style="margin-bottom:0;">
+            <button class="date-tab active" data-days="7" onclick="setLeaderboardRange(7, this)">7 days</button>
+            <button class="date-tab" data-days="14" onclick="setLeaderboardRange(14, this)">14 days</button>
+            <button class="date-tab" data-days="30" onclick="setLeaderboardRange(30, this)">30 days</button>
+          </div>
+          <button class="btn-ghost-mini" onclick="downloadTeamReport()" title="Download the whole-team leaderboard as a PDF">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>PDF
+          </button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div id="leaderboard-list">
+          <div class="empty-state">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ GUARD ACCOUNTS ============ -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title"><svg class="icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Guard Accounts</span>
+        <button class="btn btn-primary" style="padding:8px 14px; font-size:12.5px;" onclick="openAddGuardModal()">+ Add Guard</button>
+      </div>
+      <div class="panel-body">
+        <div id="guards-list">
+          <div class="empty-state">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL: Add Guard -->
+<div class="modal-overlay" id="add-guard-modal">
+  <div class="modal-box" style="max-width:380px;">
+    <button class="modal-close" onclick="closeModal('add-guard-modal')">&times;</button>
+    <h3 style="margin:0 0 16px;">Add Guard Account</h3>
+    <form id="add-guard-form" onsubmit="submitAddGuard(event)">
+      <div class="field"><label>Full Name</label><input type="text" id="ag_full_name" placeholder="e.g. Guard 3 - Faiz" required></div>
+      <div class="field"><label>Username</label><input type="text" id="ag_username" class="mono" placeholder="e.g. guard3" required></div>
+      <div class="field"><label>Password</label><input type="password" id="ag_password" placeholder="At least 6 characters" required minlength="6"></div>
+      <div class="field">
+        <label>Role</label>
+        <select id="ag_role">
+          <option value="guard">Guard</option>
+          <option value="head_guard">Head Guard</option>
+        </select>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div class="field">
+          <label>Gender</label>
+          <select id="ag_gender">
+            <option value="">-</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+          </select>
+        </div>
+        <div class="field"><label>Phone No.</label><input type="tel" id="ag_phone" placeholder="e.g. 012-3456789"></div>
+      </div>
+      <div class="field"><label>Home Address</label><textarea id="ag_address" rows="2" placeholder="Full residential address"></textarea></div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div class="field"><label>IC - Front</label><input type="file" id="ag_ic_front" accept="image/*"></div>
+        <div class="field"><label>IC - Back</label><input type="file" id="ag_ic_back" accept="image/*"></div>
+      </div>
+      <p style="font-size:10.5px; color:var(--muted); margin:-6px 0 12px;">IC copies are only viewable by Head Guard accounts and are stored for identity verification purposes.</p>
+      <div id="add-guard-status" style="font-size:12.5px; margin-bottom:10px;"></div>
+      <button type="submit" class="btn btn-primary" style="width:100%;">Create Account</button>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: Reset Password -->
+<div class="modal-overlay" id="reset-pw-modal">
+  <div class="modal-box" style="max-width:360px;">
+    <button class="modal-close" onclick="closeModal('reset-pw-modal')">&times;</button>
+    <h3 style="margin:0 0 4px;">Reset Password</h3>
+    <p style="font-size:12.5px; color:var(--muted); margin:0 0 16px;" id="reset-pw-target"></p>
+    <form id="reset-pw-form" onsubmit="submitResetPassword(event)">
+      <div class="field"><label>New Password</label><input type="password" id="rp_password" placeholder="At least 6 characters" required minlength="6"></div>
+      <div id="reset-pw-status" style="font-size:12.5px; margin-bottom:10px;"></div>
+      <button type="submit" class="btn btn-primary" style="width:100%;">Set New Password</button>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: Guard Profile / Activity -->
+<div class="modal-overlay" id="profile-modal">
+  <div class="modal-box" style="max-width:560px;">
+    <button class="modal-close" onclick="closeModal('profile-modal')">&times;</button>
+    <div id="profile-modal-body">
+      <div class="empty-state">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Edit Guard Details -->
+<div class="modal-overlay" id="edit-guard-modal">
+  <div class="modal-box" style="max-width:380px;">
+    <button class="modal-close" onclick="closeModal('edit-guard-modal')">&times;</button>
+    <h3 style="margin:0 0 16px;">Edit Guard Details</h3>
+    <form id="edit-guard-form" onsubmit="submitEditGuard(event)">
+      <div class="field"><label>Full Name</label><input type="text" id="eg_full_name" required></div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div class="field">
+          <label>Gender</label>
+          <select id="eg_gender">
+            <option value="">-</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+          </select>
+        </div>
+        <div class="field"><label>Phone No.</label><input type="tel" id="eg_phone"></div>
+      </div>
+      <div class="field"><label>Home Address</label><textarea id="eg_address" rows="2"></textarea></div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div class="field"><label>Replace IC - Front</label><input type="file" id="eg_ic_front" accept="image/*"></div>
+        <div class="field"><label>Replace IC - Back</label><input type="file" id="eg_ic_back" accept="image/*"></div>
+      </div>
+      <p style="font-size:10.5px; color:var(--muted); margin:-6px 0 12px;">Leave the file fields empty to keep the existing IC copies.</p>
+      <div id="edit-guard-status" style="font-size:12.5px; margin-bottom:10px;"></div>
+      <button type="submit" class="btn btn-primary" style="width:100%;">Save Changes</button>
+    </form>
+  </div>
+</div>
+
+<script>
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(ov => { ov.addEventListener('click', e => { if (e.target === ov) ov.classList.remove('open'); }); });
+
+function initials(name) {
+  if (!name) return '?';
+  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+}
+function formatLocalTime(iso) {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+/* ============ LEADERBOARD ============ */
+let leaderboardDays = 7;
+
+function setLeaderboardRange(days, btnEl) {
+  leaderboardDays = days;
+  btnEl.parentElement.querySelectorAll('.date-tab').forEach(b => b.classList.remove('active'));
+  btnEl.classList.add('active');
+  loadLeaderboard();
+}
+
+async function loadLeaderboard() {
+  const list = document.getElementById('leaderboard-list');
+  try {
+    const res = await fetch(`/api/analytics/overview?days=${leaderboardDays}`);
+    if (res.status === 403) { list.innerHTML = '<div class="empty-state">Head Guard access only.</div>'; return; }
+    const data = await res.json();
+    const guards = data.by_guard || [];
+
+    if (!guards.length) { list.innerHTML = '<div class="empty-state">No guard activity in this range yet.</div>'; return; }
+
+    const medals = ['🥇', '🥈', '🥉'];
+    list.innerHTML = guards.map((g, i) => {
+      const total = g.detections_handled + g.manual_overrides + g.registrations;
+      return `
+      <div class="leaderboard-row" onclick='openProfileByName(${JSON.stringify(g.guard)})'>
+        <div class="leaderboard-rank">${medals[i] || (i + 1)}</div>
+        <div class="leaderboard-avatar">${initials(g.guard)}</div>
+        <div class="leaderboard-info">
+          <div class="leaderboard-name">${g.guard}</div>
+          <div class="leaderboard-stats">
+            <span>${g.registrations} registered</span>
+            <span>${g.manual_overrides} overrides</span>
+            <span>${g.detections_handled} handled</span>
+          </div>
+        </div>
+        <div class="leaderboard-total">${total}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = '<div class="empty-state">Could not load leaderboard.</div>';
+  }
+}
+
+/* ============ GUARD ACCOUNTS ============ */
+let guardsCache = [];
+
+async function loadGuards() {
+  const list = document.getElementById('guards-list');
+  try {
+    const res = await fetch('/api/admin/guards');
+    const guards = await res.json();
+    guardsCache = guards;
+
+    if (!guards.length) { list.innerHTML = '<div class="empty-state">No guard accounts yet.</div>'; return; }
+
+    list.innerHTML = guards.map(g => `
+      <div class="plate-row" onclick='openProfileById(${g.id}, ${JSON.stringify(g.full_name)})' style="${g.is_active === false ? 'opacity:0.55;' : ''}">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div class="leaderboard-avatar" style="width:36px;height:36px;font-size:12px;">${initials(g.full_name)}</div>
+          <div>
+            <div style="font-weight:700; font-size:13px;">${g.full_name} ${g.role === 'head_guard' ? '<span class="badge manual" style="margin-left:6px;">Head Guard</span>' : ''} ${g.is_active === false ? '<span class="badge" style="margin-left:6px; background:var(--muted); color:#fff;">Deactivated</span>' : ''}</div>
+            <div class="owner">@${g.username} · joined ${formatLocalTime(g.created_at)}</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          ${g.is_active === false
+            ? `<button class="btn-del" onclick='event.stopPropagation(); reactivateGuard(${g.id})'>Reactivate</button>`
+            : `<button class="btn-del" onclick='event.stopPropagation(); openResetPasswordModal(${g.id}, ${JSON.stringify(g.full_name)})'>Reset Password</button>
+               <button class="btn-del" onclick='event.stopPropagation(); deleteGuard(${g.id}, ${JSON.stringify(g.full_name)})'>Remove</button>`
+          }
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    list.innerHTML = '<div class="empty-state">Could not load guard accounts.</div>';
+  }
+}
+
+function openAddGuardModal() {
+  document.getElementById('add-guard-form').reset();
+  document.getElementById('add-guard-status').textContent = '';
+  document.getElementById('add-guard-modal').classList.add('open');
+}
+
+async function submitAddGuard(e) {
+  e.preventDefault();
+  const statusEl = document.getElementById('add-guard-status');
+  const fd = new FormData();
+  fd.append('full_name', document.getElementById('ag_full_name').value.trim());
+  fd.append('username', document.getElementById('ag_username').value.trim());
+  fd.append('password', document.getElementById('ag_password').value);
+  fd.append('role', document.getElementById('ag_role').value);
+  fd.append('gender', document.getElementById('ag_gender').value);
+  fd.append('phone', document.getElementById('ag_phone').value.trim());
+  fd.append('address', document.getElementById('ag_address').value.trim());
+  const icFront = document.getElementById('ag_ic_front').files[0];
+  const icBack = document.getElementById('ag_ic_back').files[0];
+  if (icFront) fd.append('ic_front', icFront);
+  if (icBack) fd.append('ic_back', icBack);
+
+  const res = await fetch('/api/admin/guards', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.error) {
+    statusEl.textContent = data.error; statusEl.style.color = 'var(--accent-red)';
+  } else {
+    statusEl.textContent = data.message; statusEl.style.color = 'var(--accent-green)';
+    loadGuards();
+    setTimeout(() => closeModal('add-guard-modal'), 900);
+  }
+}
+
+let resetPasswordTargetId = null;
+
+function openResetPasswordModal(guardId, fullName) {
+  resetPasswordTargetId = guardId;
+  document.getElementById('reset-pw-target').textContent = `For: ${fullName}`;
+  document.getElementById('reset-pw-form').reset();
+  document.getElementById('reset-pw-status').textContent = '';
+  document.getElementById('reset-pw-modal').classList.add('open');
+}
+
+async function submitResetPassword(e) {
+  e.preventDefault();
+  const statusEl = document.getElementById('reset-pw-status');
+  const password = document.getElementById('rp_password').value;
+  const res = await fetch(`/api/admin/guards/${resetPasswordTargetId}/reset-password`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }),
+  });
+  const data = await res.json();
+  if (data.error) {
+    statusEl.textContent = data.error; statusEl.style.color = 'var(--accent-red)';
+  } else {
+    statusEl.textContent = data.message; statusEl.style.color = 'var(--accent-green)';
+    setTimeout(() => closeModal('reset-pw-modal'), 900);
+  }
+}
+
+async function deleteGuard(guardId, fullName) {
+  if (!confirm(`Remove guard account "${fullName}"? This can't be undone.`)) return;
+  const res = await fetch(`/api/admin/guards/${guardId}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (data.error) { alert(data.error); return; }
+  if (data.status === 'deactivated') { alert(data.message); }
+  loadGuards();
+}
+
+async function reactivateGuard(guardId) {
+  const res = await fetch(`/api/admin/guards/${guardId}/reactivate`, { method: 'POST' });
+  const data = await res.json();
+  if (data.error) { alert(data.error); return; }
+  loadGuards();
+}
+
+/* ============ EDIT GUARD DETAILS ============ */
+function openEditGuardModal(guardId) {
+  const g = guardsCache.find(x => x.id === guardId);
+  if (!g) { alert('Could not find that guard\'s account details.'); return; }
+  document.getElementById('edit-guard-form').reset();
+  document.getElementById('edit-guard-status').textContent = '';
+  document.getElementById('eg_full_name').value = g.full_name || '';
+  document.getElementById('eg_gender').value = g.gender || '';
+  document.getElementById('eg_phone').value = g.phone || '';
+  document.getElementById('eg_address').value = g.address || '';
+  document.getElementById('edit-guard-form').dataset.guardId = guardId;
+  document.getElementById('edit-guard-modal').classList.add('open');
+}
+
+async function submitEditGuard(e) {
+  e.preventDefault();
+  const statusEl = document.getElementById('edit-guard-status');
+  const guardId = document.getElementById('edit-guard-form').dataset.guardId;
+  const fd = new FormData();
+  fd.append('full_name', document.getElementById('eg_full_name').value.trim());
+  fd.append('gender', document.getElementById('eg_gender').value);
+  fd.append('phone', document.getElementById('eg_phone').value.trim());
+  fd.append('address', document.getElementById('eg_address').value.trim());
+  const icFront = document.getElementById('eg_ic_front').files[0];
+  const icBack = document.getElementById('eg_ic_back').files[0];
+  if (icFront) fd.append('ic_front', icFront);
+  if (icBack) fd.append('ic_back', icBack);
+
+  const res = await fetch(`/api/admin/guards/${guardId}/details`, { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.error) {
+    statusEl.textContent = data.error; statusEl.style.color = 'var(--accent-red)';
+    return;
+  }
+  statusEl.textContent = data.message; statusEl.style.color = 'var(--accent-green)';
+  await loadGuards();
+  const g = guardsCache.find(x => x.id == guardId);
+  setTimeout(() => {
+    closeModal('edit-guard-modal');
+    if (g) openProfileById(g.id, g.full_name);
+  }, 700);
+}
+
+/* ============ GUARD PROFILE MODAL ============ */
+let profileChart = null;
+let profileDays = 14;
+let profileCurrentId = null;
+
+async function openProfileByName(guardName) {
+  let match = guardsCache.find(g => g.full_name === guardName);
+  if (!match) {
+    // cache belum ready (race condition jarang berlaku) - fetch sekali lagi
+    try {
+      const res = await fetch('/api/admin/guards');
+      guardsCache = await res.json();
+      match = guardsCache.find(g => g.full_name === guardName);
+    } catch (e) { /* fall through to error below */ }
+  }
+  if (!match) { alert('Could not find that guard\'s account details.'); return; }
+  openProfileById(match.id, match.full_name);
+}
+
+function icThumbHtml(path, label) {
+  if (!path) return `<div class="ic-thumb-missing">No ${label} on file</div>`;
+  return `<a class="ic-thumb" href="/${path}" target="_blank" rel="noopener"><img src="/${path}" alt="${label}"><div class="cap">${label} (click to enlarge)</div></a>`;
+}
+
+function personalDetailsHtml(g) {
+  return `
+    <div class="panel" style="margin-bottom:16px;">
+      <div class="panel-header">
+        <span class="panel-title" style="font-size:11.5px;">Personal Details</span>
+        <button class="btn-ghost-mini" onclick="openEditGuardModal(${g.id})">Edit</button>
+      </div>
+      <div class="panel-body" style="padding:14px 16px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; font-size:12.5px; margin-bottom:12px;">
+          <div><span style="color:var(--muted);">Username</span><br><span class="mono">@${g.username}</span></div>
+          <div><span style="color:var(--muted);">Gender</span><br>${g.gender || '-'}</div>
+          <div><span style="color:var(--muted);">Phone No.</span><br>${g.phone || '-'}</div>
+          <div><span style="color:var(--muted);">Role</span><br>${g.role === 'head_guard' ? 'Head Guard' : 'Guard'}</div>
+          <div style="grid-column:1 / -1;"><span style="color:var(--muted);">Home Address</span><br>${g.address || '-'}</div>
+        </div>
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-weight:700; margin-bottom:6px;">Identity Card Copy</div>
+        <div class="ic-thumb-row">
+          ${icThumbHtml(g.ic_front_path, 'IC Front')}
+          ${icThumbHtml(g.ic_back_path, 'IC Back')}
+        </div>
+      </div>
+    </div>`;
+}
+
+function openProfileById(guardId, fullName) {
+  profileCurrentId = guardId;
+  profileDays = 14;
+  const g = guardsCache.find(x => x.id === guardId) || { id: guardId, username: '', role: 'guard' };
+  document.getElementById('profile-modal').classList.add('open');
+  document.getElementById('profile-modal-body').innerHTML = `
+    <div style="display:flex; align-items:center; gap:14px; margin-bottom:16px;">
+      <div class="leaderboard-avatar" style="width:48px;height:48px;font-size:16px;">${initials(fullName)}</div>
+      <div>
+        <div style="font-weight:800; font-size:16px;">${fullName}</div>
+        <div style="font-size:11px; color:var(--muted);">Activity report</div>
+      </div>
+    </div>
+    ${personalDetailsHtml(g)}
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+      <div class="date-range-tabs" id="profile-range-tabs" style="margin-bottom:0;">
+        <button class="date-tab" data-days="7" onclick="setProfileRange(7, this)">7 days</button>
+        <button class="date-tab active" data-days="14" onclick="setProfileRange(14, this)">14 days</button>
+        <button class="date-tab" data-days="30" onclick="setProfileRange(30, this)">30 days</button>
+      </div>
+      <button class="btn-ghost-mini" onclick="downloadProfileReport()" title="Download this guard's report as a PDF">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>PDF
+      </button>
+    </div>
+    <div class="analytics-summary" style="grid-template-columns:repeat(4,1fr); margin-bottom:14px;">
+      <div class="kpi-card"><div class="kpi-icon green"><svg class="icon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 17.01"/></svg></div><div><div class="kpi-num" id="profile-registrations">-</div><div class="kpi-label">Registered</div></div></div>
+      <div class="kpi-card"><div class="kpi-icon amber"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><div><div class="kpi-num" id="profile-overrides">-</div><div class="kpi-label">Overrides</div></div></div>
+      <div class="kpi-card"><div class="kpi-icon blue"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><div class="kpi-num" id="profile-sessions">-</div><div class="kpi-label">Sessions</div></div></div>
+      <div class="kpi-card"><div class="kpi-icon red"><svg class="icon" viewBox="0 0 24 24"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg></div><div><div class="kpi-num" id="profile-hours">-</div><div class="kpi-label">Hours</div></div></div>
+    </div>
+    <div class="chart-wrap" style="margin-bottom:14px;"><canvas id="profile-chart" height="180"></canvas></div>
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:var(--muted); font-weight:700; margin-bottom:8px;">Recent Actions</div>
+    <div class="item-list" id="profile-recent-list" style="max-height:220px;">
+      <div class="empty-state">Loading...</div>
+    </div>
+  `;
+  loadProfileData();
+}
+
+function setProfileRange(days, btnEl) {
+  profileDays = days;
+  btnEl.parentElement.querySelectorAll('.date-tab').forEach(b => b.classList.remove('active'));
+  btnEl.classList.add('active');
+  loadProfileData();
+}
+
+async function loadProfileData() {
+  try {
+    const res = await fetch(`/api/admin/guards/${profileCurrentId}/analytics?days=${profileDays}`);
+    const data = await res.json();
+    if (data.error) { document.getElementById('profile-recent-list').innerHTML = `<div class="empty-state">${data.error}</div>`; return; }
+
+    document.getElementById('profile-registrations').textContent = data.totals.registrations;
+    document.getElementById('profile-overrides').textContent = data.totals.manual_overrides;
+    document.getElementById('profile-sessions').textContent = data.totals.login_sessions;
+    document.getElementById('profile-hours').textContent = data.totals.hours_on_duty;
+
+    try { renderProfileChart(data.daily); } catch (e) { console.error(e); }
+
+    const list = document.getElementById('profile-recent-list');
+    if (!data.recent_actions.length) {
+      list.innerHTML = '<div class="empty-state">No activity in this range.</div>';
+    } else {
+      list.innerHTML = data.recent_actions.map(a => `
+        <div class="log-item">
+          <div class="meta">
+            <span class="plate-chip ${a.type === 'registration' ? 'status-registered' : 'status-manual'}" style="font-size:12px; padding:3px 7px;">${a.plate_number || 'MANUAL'}</span>
+            <span class="time">${formatLocalTime(a.timestamp)}</span>
+          </div>
+          <span class="badge ${a.type === 'registration' ? 'registered' : 'manual'}">${a.type === 'registration' ? 'Registered' : 'Override'}</span>
+        </div>`).join('');
+    }
+  } catch (e) {
+    document.getElementById('profile-recent-list').innerHTML = '<div class="empty-state">Could not load this guard\'s activity.</div>';
+  }
+}
+
+function renderProfileChart(daily) {
+  if (typeof Chart === 'undefined') throw new Error('Chart.js not loaded');
+  const ctx = document.getElementById('profile-chart');
+  if (profileChart) profileChart.destroy();
+  if (!daily.length) return;
+  profileChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: daily.map(d => d.date.slice(5)),
+      datasets: [
+        { label: 'Registrations', data: daily.map(d => d.registrations), borderColor: '#1a9459', backgroundColor: '#1a9459', tension: 0.3 },
+        { label: 'Overrides', data: daily.map(d => d.manual_overrides), borderColor: '#c97e15', backgroundColor: '#c97e15', tension: 0.3 },
+      ],
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+        y: { beginAtZero: true, ticks: { font: { size: 10 }, precision: 0 } },
+      },
+    },
+  });
+}
+
+/* ============ PDF DOWNLOADS ============ */
+async function downloadPdf(url, fallbackName) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || 'Could not generate the report right now.');
+      return;
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename=([^;]+)/);
+    const filename = match ? match[1].trim() : fallbackName;
+    const a = document.createElement('a');
+    const objUrl = window.URL.createObjectURL(blob);
+    a.href = objUrl; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    window.URL.revokeObjectURL(objUrl);
+  } catch (e) { alert('Connection error while generating the report.'); }
+}
+function downloadTeamReport() { downloadPdf(`/api/admin/reports/pdf/team?days=${leaderboardDays}`, 'team_report.pdf'); }
+function downloadProfileReport() { downloadPdf(`/api/admin/guards/${profileCurrentId}/report/pdf?days=${profileDays}`, 'guard_report.pdf'); }
+
+loadLeaderboard();
+loadGuards();
+</script>
+
+</body>
+</html>
